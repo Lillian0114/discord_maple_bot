@@ -20,7 +20,7 @@ def parse_time_range(time_str):
 
     return to_seconds(min_time)
 
-def load_boss_times(filepath='boss_time.json'):
+def load_boss_times(filepath='./boss_time.json'):
     with open(filepath, 'r', encoding='utf-8') as f:
         raw = json.load(f)
     return raw, {k: parse_time_range(v) for k, v in raw.items()}
