@@ -1,29 +1,34 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 from config import TOKEN
 from utils.time_parser import load_boss_times
 from utils.timer_manager import start_timer, cancel_timer, get_status, is_active
-from datetime import datetime
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='/', intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
+tree = bot.tree
 
-# 載入王時間資料
+# 載入 Boss 時間
 boss_times, boss_time_seconds = load_boss_times()
+
+# MY_GUILD = discord.Object(id=GUILD_ID)
 
 @bot.event
 async def on_ready():
-    print(f'機器人已上線：{bot.user}')
+    await tree.sync()
+    print(f"機器人已上線: {bot.user}")
 
-@bot.command()
-async def timer(ctx, boss_name: str, game_channel: str):
+@tree.command(name="timer", description="開始設定該王的重生倒數")
+@app_commands.describe(boss_name="王名", game_channel="頻道名 (例如 general)")
+async def timer(interaction: discord.Interaction, boss_name: str, game_channel: str):
     if is_active(boss_name, game_channel):
-        await ctx.send(f"「{boss_name}」在頻道 {game_channel} 已經在倒數中囉！")
+        await interaction.response.send_message(f"「{boss_name}」在頻道 {game_channel} 已經在倒數中囉！", ephemeral=True)
         return
 
     if boss_name not in boss_time_seconds:
-        await ctx.send(f"找不到「{boss_name}」的重生時間資料")
+        await interaction.response.send_message(f"找不到「{boss_name}」的重生時間資料", ephemeral=True)
         return
 
     seconds = boss_time_seconds[boss_name]
@@ -31,31 +36,31 @@ async def timer(ctx, boss_name: str, game_channel: str):
     minutes = (seconds % 3600) // 60
     label = f"{hours} 小時 {minutes} 分鐘" if hours else f"{minutes} 分鐘"
 
-    await start_timer(ctx, boss_name, game_channel, seconds, label, boss_times)
+    await interaction.response.defer()  # 延遲回應
+    await start_timer(interaction, boss_name, game_channel, seconds, label, boss_times)
 
-@bot.command()
-async def cancel(ctx, boss_name: str, game_channel: str):
+@tree.command(name="cancel", description="取消王的重生倒數")
+@app_commands.describe(boss_name="王名", game_channel="頻道名")
+async def cancel(interaction: discord.Interaction, boss_name: str, game_channel: str):
     if cancel_timer(boss_name, game_channel):
-        await ctx.send(f"「{boss_name}」在頻道 {game_channel} 的倒數已取消")
+        await interaction.response.send_message(f"「{boss_name}」在頻道 {game_channel} 的倒數已取消")
     else:
-        await ctx.send(f"沒有在頻道 {game_channel} 發現「{boss_name}」的倒數")
+        await interaction.response.send_message(f"沒有在頻道 {game_channel} 發現「{boss_name}」的倒數")
 
-@bot.command()
-async def status(ctx):
+@tree.command(name="status", description="查看目前正在倒數的王")
+async def status(interaction: discord.Interaction):
     status_list = get_status()
     if not status_list:
-        await ctx.send("📭 目前沒有任何王在倒數中。")
+        await interaction.response.send_message("📬 目前沒有任何王在倒數中")
         return
 
-    # 每 25 個分一頁
-    chunks = [status_list[i:i+25] for i in range(0, len(status_list), 25)]
+    chunks = [status_list[i:i + 25] for i in range(0, len(status_list), 25)]
 
     for page_num, chunk in enumerate(chunks, start=1):
         embed = discord.Embed(
-            title=f"⏳ 正在倒數的王（第 {page_num}/{len(chunks)} 頁）",
+            title=f"⏳ 正在倒數的王 (第 {page_num}/{len(chunks)} 頁)",
             color=discord.Color.orange()
         )
-
         for boss, channel, h, m, s in chunk:
             parts = []
             if h > 0: parts.append(f"{h} 小時")
@@ -64,64 +69,59 @@ async def status(ctx):
             time_left = " ".join(parts)
 
             embed.add_field(
-                name=f"{boss}（頻道 {channel}）",
-                value=f"剩餘時間：**{time_left}**",
+                name=f"{boss} (頻道 {channel})",
+                value=f"剩餘時間: **{time_left}**",
                 inline=False
             )
+        await interaction.followup.send(embed=embed)
 
-        await ctx.send(embed=embed)
-
-@bot.command()
-async def search(ctx, keyword: str):
-    keyword = keyword.strip()
+@tree.command(name="search", description="搜尋包含關鍵字的王名")
+@app_commands.describe(keyword="王名關鍵字")
+async def search(interaction: discord.Interaction, keyword: str):
     matches = {boss: time for boss, time in boss_times.items() if keyword in boss}
-
     if not matches:
-        await ctx.send(f"❌ 找不到包含「{keyword}」的王名")
+        await interaction.response.send_message(f"❌ 找不到包含「{keyword}」的王名")
         return
 
     chunks = list(matches.items())
-    pages = [chunks[i:i+25] for i in range(0, len(chunks), 25)]
+    pages = [chunks[i:i + 25] for i in range(0, len(chunks), 25)]
 
     for idx, page in enumerate(pages):
         embed = discord.Embed(
-            title=f"🔍 搜尋結果：包含「{keyword}」的王（第 {idx+1}/{len(pages)} 頁）",
+            title=f"🔍 搜尋結果: 包含「{keyword}」的王 (第 {idx + 1}/{len(pages)} 頁)",
             color=discord.Color.green()
         )
         for boss, time_range in page:
             embed.add_field(name=boss, value=time_range, inline=False)
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-@bot.command()
-async def boss_list(ctx):
+@tree.command(name="boss_list", description="顯示所有已定義的 Boss 重生時間")
+async def boss_list(interaction: discord.Interaction):
     boss_list = list(boss_times.items())
-    chunks = [boss_list[i:i+25] for i in range(0, len(boss_list), 25)]
+    chunks = [boss_list[i:i + 25] for i in range(0, len(boss_list), 25)]
 
     for index, chunk in enumerate(chunks):
         embed = discord.Embed(
-            title=f"📚 所有 Boss 重生時間（第 {index+1}/{len(chunks)} 頁）",
+            title=f"📚 所有 Boss 重生時間 (第 {index + 1}/{len(chunks)} 頁)",
             color=discord.Color.teal()
         )
         for boss, time_range in chunk:
             embed.add_field(name=boss, value=time_range, inline=False)
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-@bot.command()
-async def help_me(ctx):
+@tree.command(name="help", description="顯示指令列表")
+async def help_me(interaction: discord.Interaction):
     embed = discord.Embed(
         title="Boss Timer Bot 指令列表",
-        description="以下是本機器人的所有可用指令與說明：",
+        description="以下是此機器人可用指令:",
         color=discord.Color.blue()
     )
-
-    embed.add_field(name="`/timer 王名 頻道`", value="開始設定該王的重生倒數計時。", inline=False)
-    embed.add_field(name="`/cancel 王名 頻道`", value="取消該王在指定頻道的倒數。", inline=False)
-    embed.add_field(name="`/status`", value="查看目前正在倒數的王。", inline=False)
-    embed.add_field(name="`/search 關鍵字`", value="搜尋包含關鍵字的王名。", inline=False)
-    embed.add_field(name="`/boss_list`", value="顯示所有已定義的 Boss 重生時間。", inline=False)
-    embed.add_field(name="`/help_me`", value="顯示本說明。", inline=False)
-
-    await ctx.send(embed=embed)
-
+    embed.add_field(name="`/timer 王名 頻道`", value="開始重生倒數", inline=False)
+    embed.add_field(name="`/cancel 王名 頻道`", value="取消倒數", inline=False)
+    embed.add_field(name="`/status`", value="查看目前倒數王", inline=False)
+    embed.add_field(name="`/search 關鍵字`", value="搜尋王名", inline=False)
+    embed.add_field(name="`/boss_list`", value="顯示所有 Boss", inline=False)
+    embed.add_field(name="`/help`", value="顯示此說明", inline=False)
+    await interaction.response.send_message(embed=embed)
 
 bot.run(TOKEN)
