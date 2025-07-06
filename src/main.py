@@ -106,5 +106,22 @@ async def boss_list(ctx):
             embed.add_field(name=boss, value=time_range, inline=False)
         await ctx.send(embed=embed)
 
+@bot.command()
+async def help_me(ctx):
+    embed = discord.Embed(
+        title="Boss Timer Bot 指令列表",
+        description="以下是本機器人的所有可用指令與說明：",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(name="`/timer 王名 頻道`", value="開始設定該王的重生倒數計時。", inline=False)
+    embed.add_field(name="`/cancel 王名 頻道`", value="取消該王在指定頻道的倒數。", inline=False)
+    embed.add_field(name="`/status`", value="查看目前正在倒數的王。", inline=False)
+    embed.add_field(name="`/search 關鍵字`", value="搜尋包含關鍵字的王名。", inline=False)
+    embed.add_field(name="`/boss_list`", value="顯示所有已定義的 Boss 重生時間。", inline=False)
+    embed.add_field(name="`/help_me`", value="顯示本說明。", inline=False)
+
+    await ctx.send(embed=embed)
+
 
 bot.run(TOKEN)
