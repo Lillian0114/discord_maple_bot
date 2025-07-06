@@ -1,3 +1,4 @@
+import os
 import json
 
 def parse_time_range(time_str):
@@ -20,7 +21,12 @@ def parse_time_range(time_str):
 
     return to_seconds(min_time)
 
-def load_boss_times(filepath='./boss_time.json'):
+def load_boss_times(filepath=None):
+    if filepath is None:
+        # 找出 src/boss_time.json 的絕對路徑
+        base_dir = os.path.dirname(__file__)  # /app/src/utils
+        filepath = os.path.abspath(os.path.join(base_dir, '..', 'boss_time.json'))
+
     with open(filepath, 'r', encoding='utf-8') as f:
         raw = json.load(f)
     return raw, {k: parse_time_range(v) for k, v in raw.items()}
