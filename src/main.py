@@ -18,34 +18,45 @@ boss_times, boss_time_seconds = load_boss_times()
 @bot.event
 async def on_ready():
     await tree.sync()
+    # await tree.sync(guild=MY_GUILD)
     print(f"機器人已上線: {bot.user}")
 
 @tree.command(name="timer", description="開始設定該王的重生倒數")
-@app_commands.describe(boss_name="王名", game_channel="頻道名 (例如 general)")
+@app_commands.describe(boss_name="王名", game_channel="遊戲頻道名稱")
 async def timer(interaction: discord.Interaction, boss_name: str, game_channel: str):
+    # 先檢查有沒有活躍的計時器
     if is_active(boss_name, game_channel):
-        await interaction.response.send_message(f"「{boss_name}」在頻道 {game_channel} 已經在倒數中囉！", ephemeral=True)
+        await interaction.response.send_message(
+            f"「{boss_name}」在遊戲頻道 {game_channel} 已經在倒數中囉！",
+            ephemeral=True
+        )
         return
 
+    # 檢查 boss 是否存在
     if boss_name not in boss_time_seconds:
-        await interaction.response.send_message(f"找不到「{boss_name}」的重生時間資料", ephemeral=True)
+        await interaction.response.send_message(
+            f"找不到「{boss_name}」的重生時間資料",
+            ephemeral=True
+        )
         return
+
+    # 以上兩個條件都不成立，開始倒數前先 defer
+    await interaction.response.defer()
 
     seconds = boss_time_seconds[boss_name]
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     label = f"{hours} 小時 {minutes} 分鐘" if hours else f"{minutes} 分鐘"
 
-    await interaction.response.defer()  # 延遲回應
     await start_timer(interaction, boss_name, game_channel, seconds, label, boss_times)
 
 @tree.command(name="cancel", description="取消王的重生倒數")
-@app_commands.describe(boss_name="王名", game_channel="頻道名")
+@app_commands.describe(boss_name="王名", game_channel="遊戲頻道名稱")
 async def cancel(interaction: discord.Interaction, boss_name: str, game_channel: str):
     if cancel_timer(boss_name, game_channel):
-        await interaction.response.send_message(f"「{boss_name}」在頻道 {game_channel} 的倒數已取消")
+        await interaction.response.send_message(f"「{boss_name}」在遊戲頻道 {game_channel} 的倒數已取消")
     else:
-        await interaction.response.send_message(f"沒有在頻道 {game_channel} 發現「{boss_name}」的倒數")
+        await interaction.response.send_message(f"沒有在遊戲頻道 {game_channel} 發現「{boss_name}」的倒數")
 
 @tree.command(name="status", description="查看目前正在倒數的王")
 async def status(interaction: discord.Interaction):
@@ -53,6 +64,8 @@ async def status(interaction: discord.Interaction):
     if not status_list:
         await interaction.response.send_message("📬 目前沒有任何王在倒數中")
         return
+
+    await interaction.response.defer()
 
     chunks = [status_list[i:i + 25] for i in range(0, len(status_list), 25)]
 
@@ -97,6 +110,8 @@ async def search(interaction: discord.Interaction, keyword: str):
 
 @tree.command(name="boss_list", description="顯示所有已定義的 Boss 重生時間")
 async def boss_list(interaction: discord.Interaction):
+    await interaction.response.defer() 
+
     boss_list = list(boss_times.items())
     chunks = [boss_list[i:i + 25] for i in range(0, len(boss_list), 25)]
 
