@@ -2,7 +2,7 @@ import discord
 import asyncio
 from discord.ext import commands
 from discord import app_commands
-from config import TOKEN, GUILD_ID
+from config import TOKEN
 from utils.time_parser import load_boss_times, save_boss_times_from_web
 from utils.timer_manager import start_timer, cancel_timer, get_status, is_active
 
@@ -23,8 +23,7 @@ async def update_boss_times_periodically():
             print("✅ boss_times 已自動同步到記憶體")
         await asyncio.sleep(14400)
 
-MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
-TEST_GUILD_IDS = [g.id for g in MY_GUILDS]
+# MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
 
 @bot.event
 async def on_ready():
