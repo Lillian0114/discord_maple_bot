@@ -2,10 +2,13 @@ import discord
 import asyncio
 from discord.ext import commands
 from discord import app_commands
-from config import TOKEN
 from utils.time_parser import load_boss_times, save_boss_times_from_web
 from utils.timer_manager import start_timer, cancel_timer, get_status, is_active
+from typing import Optional
+from config import TOKEN
+# from config import TOKEN, GUILD_ID
 
+# MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents)
@@ -23,8 +26,6 @@ async def update_boss_times_periodically():
             print("✅ boss_times 已自動同步到記憶體")
         await asyncio.sleep(14400)
 
-# MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
-
 @bot.event
 async def on_ready():
     # 開始背景任務，定時更新 boss_time.json 並同步記憶體
@@ -35,7 +36,7 @@ async def on_ready():
     print(f"機器人已上線: {bot.user}")
 
 @tree.command(name="timer", description="開始設定該王的重生倒數")
-@app_commands.describe(boss_name="王名", game_channel="遊戲頻道名稱")
+@app_commands.describe(boss_name="王名", game_channel="遊戲頻道")
 async def timer(interaction: discord.Interaction, boss_name: str, game_channel: str):
     if is_active(interaction.guild.id, boss_name, game_channel):
         await interaction.response.send_message(
@@ -132,6 +133,50 @@ async def boss_list(interaction: discord.Interaction):
             embed.add_field(name=boss, value=time_range, inline=False)
         await interaction.followup.send(embed=embed)
 
+@tree.command(name="custom_timer", description="自訂倒數計時（小時與分鐘）")
+@app_commands.describe(
+    boss_name="自訂王名",
+    game_channel="遊戲頻道名稱",
+    hours="計時小時數，0 表示不滿一小時",
+    minutes="計時分鐘數（可省略，預設0）"
+)
+async def custom_timer(
+    interaction: discord.Interaction,
+    boss_name: str,
+    game_channel: str,
+    hours: int,
+    minutes: Optional[int] = 0
+):
+    if hours < 0 or (minutes is not None and (minutes < 0 or minutes >= 60)):
+        await interaction.response.send_message("請輸入有效的時間，小時不可負數，分鐘須介於0~59", ephemeral=True)
+        return
+
+    total_seconds = hours * 3600 + minutes * 60
+    if total_seconds <= 0:
+        await interaction.response.send_message("計時時間需大於 0", ephemeral=True)
+        return
+
+    if is_active(interaction.guild.id, boss_name, game_channel):
+        await interaction.response.send_message(
+            f"「{boss_name}」在遊戲頻道 {game_channel} 已經在倒數中囉！", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    label_parts = []
+    if hours > 0:
+        label_parts.append(f"{hours} 小時")
+    if minutes > 0:
+        label_parts.append(f"{minutes} 分鐘")
+    label = " ".join(label_parts)
+
+    if not label:
+        label = "0 分鐘"
+
+    custom_boss_times = {boss_name: label}
+
+    await start_timer(interaction, boss_name, game_channel, total_seconds, label, custom_boss_times)
+
 @tree.command(name="help", description="顯示指令列表")
 async def help_me(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -140,11 +185,13 @@ async def help_me(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
     embed.add_field(name="`/timer 王名 頻道`", value="開始重生倒數", inline=False)
+    embed.add_field(name="`/custom_timer 王名 頻道 小時 分鐘`", value="開始重生倒數", inline=False)
     embed.add_field(name="`/cancel 王名 頻道`", value="取消倒數", inline=False)
     embed.add_field(name="`/status`", value="查看目前倒數王", inline=False)
     embed.add_field(name="`/search 關鍵字`", value="搜尋王名", inline=False)
     embed.add_field(name="`/boss_list`", value="顯示所有 Boss", inline=False)
     embed.add_field(name="`/help`", value="顯示此說明", inline=False)
     await interaction.response.send_message(embed=embed)
+
 
 bot.run(TOKEN)
