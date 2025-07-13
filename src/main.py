@@ -1,8 +1,9 @@
 import discord
+import asyncio
 from discord.ext import commands
 from discord import app_commands
-from config import TOKEN
-from utils.time_parser import load_boss_times
+from config import TOKEN, GUILD_ID
+from utils.time_parser import load_boss_times, save_boss_times_from_web
 from utils.timer_manager import start_timer, cancel_timer, get_status, is_active
 
 intents = discord.Intents.default()
@@ -13,10 +14,22 @@ tree = bot.tree
 # 載入 Boss 時間
 boss_times, boss_time_seconds = load_boss_times()
 
-# MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
+async def update_boss_times_periodically():
+    global boss_times, boss_time_seconds
+    while True:
+        updated = await save_boss_times_from_web()
+        if updated:
+            boss_times, boss_time_seconds = load_boss_times()
+            print("✅ boss_times 已自動同步到記憶體")
+        await asyncio.sleep(14400)
+
+MY_GUILDS = [discord.Object(id=gid) for gid in GUILD_ID]
+TEST_GUILD_IDS = [g.id for g in MY_GUILDS]
 
 @bot.event
 async def on_ready():
+    # 開始背景任務，定時更新 boss_time.json 並同步記憶體
+    bot.loop.create_task(update_boss_times_periodically())
     await tree.sync()
     # for g in MY_GUILDS:
     #     await tree.sync(guild=g)

@@ -1,5 +1,7 @@
 import os
 import json
+import aiohttp
+import shutil
 
 def parse_time_range(time_str):
     """解析時間字串，返回最小秒數"""
@@ -30,3 +32,26 @@ def load_boss_times(filepath=None):
     with open(filepath, 'r', encoding='utf-8') as f:
         raw = json.load(f)
     return raw, {k: parse_time_range(v) for k, v in raw.items()}
+
+async def save_boss_times_from_web():
+    url = "https://a2983456456.github.io/artale-drop/boss_time.json"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+        base_dir = os.path.dirname(__file__)
+        filepath = os.path.abspath(os.path.join(base_dir, '..', 'boss_time.json'))
+        tmp_path = filepath + '.tmp'
+
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        shutil.move(tmp_path, filepath)
+
+        print("boss_time.json 已安全更新！")
+        return True
+    except Exception as e:
+        print(f"更新 boss_time.json 失敗：{e}")
+        return False
